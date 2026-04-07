@@ -1,5 +1,6 @@
 from html import unescape
 import re
+import random
 from typing import Any
 
 from objects import course
@@ -21,12 +22,13 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
     """
 
     courses = []
+    session_id = str(random.randint(10000000, 99999999))
 
     # fetch raw html from Carleton course search page
     data = [
         ('wsea_code', 'EXT'),
         ('term_code', str(course_term)),
-        ('session_id', '25259018'),
+        ('session_id', session_id),
         ('ws_numb', ''),
         ('sel_aud', 'dummy'),
         ('sel_subj', 'dummy'),
