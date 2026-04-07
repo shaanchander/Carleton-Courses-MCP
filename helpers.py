@@ -1,5 +1,6 @@
 from html import unescape
 import re
+from typing import Any
 
 from objects import course
 import httpx
@@ -101,6 +102,7 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
         end_date = ""
         meeting_days = []
         meeting_times = []
+        section_information = ""
 
         date_match = re.search(r"Meeting Date:\s*(.*?)\s*to\s*(.*?)\s*(?:Days:|$)", raw_text, flags=re.I)
         if date_match:
@@ -185,6 +187,12 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
                     meeting_days = parsed_days
                 if parsed_times:
                     meeting_times = parsed_times
+
+            section_info_match = re.search(r"Section Information:\s*(.*)$", detail_text, flags=re.I)
+            if section_info_match:
+                parsed_section_information = section_info_match.group(1).strip()
+                if parsed_section_information:
+                    section_information = parsed_section_information
             detail_idx += 1
 
         try:
@@ -206,6 +214,7 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
                 session_type=session_type,
                 crn=crn,
                 section=section,
+                section_information=section_information,
                 status=status,
             )
         )
@@ -242,3 +251,146 @@ async def search_terms() -> dict[str, str]:
         terms[int(term_id.strip())] = unescape(re.sub(r"\s+", " ", text)).strip()
 
     return terms
+
+async def course_details(crn: int, term_id: int) -> dict:
+    """Fetch detailed information for a specific course by CRN."""
+    
+    url = f"https://central.carleton.ca/prod/bwysched.p_display_course?wsea_code=EXT&term_code={term_id}&disp=0&crn={str(crn)}"
+
+    details = {}
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+            raw_html = response.text
+        except Exception:
+            return details
+    
+    # Parse HTML for course details and normalize fields into a stable structure.
+    def clean_text(fragment: str) -> str:
+        text_with_breaks = re.sub(r"<br\s*/?>", "\n", fragment, flags=re.I)
+        text_without_tags = re.sub(r"<[^>]+>", "", text_with_breaks)
+        unescaped = unescape(text_without_tags)
+        lines = [re.sub(r"\s+", " ", line).strip() for line in unescaped.splitlines()]
+        return "\n".join([line for line in lines if line])
+
+    def parse_numeric_value(value: str) -> int | float | str | None:
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        if stripped == "{None}":
+            return None
+        if re.fullmatch(r"\d+", stripped):
+            return int(stripped)
+        if re.fullmatch(r"\d*\.\d+", stripped):
+            parsed = float(stripped)
+            return int(parsed) if parsed.is_integer() else parsed
+        return stripped
+
+    label_to_key = {
+        "Registration Term": "registration_term",
+        "CRN": "crn",
+        "Subject": "subject_full",
+        "Long Title": "long_title",
+        "Title": "title",
+        "Course Description": "course_description",
+        "Course Credit Value": "course_credit_value",
+        "Schedule Type": "schedule_type",
+        "Full Session Info": "full_session_info",
+        "Status": "status",
+        "Section Information": "section_information",
+        "Year in Program": "year_in_program",
+        "Level Restriction": "level_restriction",
+        "Degree Restriction": "degree_restriction",
+        "Major Restriction": "major_restriction",
+        "Program Restrictions": "program_restrictions",
+        "Department Restriction": "department_restriction",
+        "Faculty Restriction": "faculty_restriction",
+    }
+
+    row_pattern = re.compile(
+        r"<tr\b[^>]*>\s*<td\b[^>]*>(.*?)</td>\s*<td\b[^>]*>(.*?)</td>\s*</tr>",
+        flags=re.I | re.S,
+    )
+
+    previous_key = None
+    for raw_label, raw_value in row_pattern.findall(raw_html):
+        label = clean_text(raw_label).rstrip(":").strip()
+        value = clean_text(raw_value)
+
+        # Skip meeting header/data rows from the nested schedule table.
+        if label in {"Meeting Date", "Days", "Time", "Schedule", "Instructor"}:
+            continue
+
+        if label:
+            key = label_to_key.get(label, re.sub(r"\W+", "_", label.lower()).strip("_"))
+            parsed_value = parse_numeric_value(value)
+
+            if key == "program_restrictions":
+                details[key] = [parsed_value] if parsed_value not in ("", None) else []
+            else:
+                details[key] = parsed_value
+            previous_key = key
+            continue
+
+        # Continuation rows (most commonly for program restrictions).
+        if previous_key and value:
+            parsed_value = parse_numeric_value(value)
+            if isinstance(details.get(previous_key), list):
+                if parsed_value not in ("", None):
+                    details[previous_key].append(parsed_value)
+            elif details.get(previous_key) in ("", None):
+                details[previous_key] = parsed_value
+
+    subject_full = details.get("subject_full")
+    if isinstance(subject_full, str) and subject_full:
+        parts = subject_full.split()
+        if len(parts) >= 2:
+            details["subject"] = parts[0]
+            details["code"] = parts[1]
+        if len(parts) >= 3:
+            details["section"] = parts[2]
+
+    meetings: list[dict[str, Any]] = []
+    meeting_table_match = re.search(
+        r"<table\b[^>]*>\s*<tr>\s*<td><b>Meeting Date</b></td>\s*<td><b>Days</b></td>\s*<td><b>Time</b></td>\s*<td><b>Schedule</b></td>\s*<td><b>Instructor</b></td>\s*</tr>(.*?)</table>",
+        raw_html,
+        flags=re.I | re.S,
+    )
+
+    if meeting_table_match:
+        meeting_rows_html = meeting_table_match.group(1)
+        for row_html in re.findall(r"<tr\b[^>]*>(.*?)</tr>", meeting_rows_html, flags=re.I | re.S):
+            cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row_html, flags=re.I | re.S)
+            if len(cells) != 5:
+                continue
+
+            meeting_date = clean_text(cells[0])
+            days_text = clean_text(cells[1])
+            time_text = clean_text(cells[2])
+            schedule = clean_text(cells[3])
+            instructor = clean_text(cells[4])
+
+            start_date = ""
+            end_date = ""
+            date_match = re.match(r"^(.*?)\s+to\s+(.*?)$", meeting_date)
+            if date_match:
+                start_date = date_match.group(1).strip()
+                end_date = date_match.group(2).strip()
+
+            meetings.append(
+                {
+                    "meeting_date": meeting_date,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "days": days_text.split() if days_text else [],
+                    "time": time_text,
+                    "schedule": schedule,
+                    "instructor": instructor,
+                }
+            )
+
+    details["meetings"] = meetings
+    return details
+    

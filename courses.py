@@ -1,5 +1,5 @@
 # from typing import Any
-from helpers import course_search, search_terms
+from helpers import course_search, search_terms, course_details
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -26,6 +26,15 @@ async def request_term_ids() -> dict:
     """
 
     return await search_terms()
+
+@mcp.tool()
+async def request_course_details(crn: int, term_id:int) -> dict:
+    """
+    Available course terms for searching. Returns a dictionary mapping term codes to human-readable names.
+
+    """
+
+    return await course_details(crn, term_id)
     
 
 if __name__ == "__main__":
