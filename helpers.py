@@ -86,15 +86,51 @@ async def course_search(course_subject: str, course_code: str = "") -> dict:
         text = re.sub(r"<[^>]+>", "", fragment)
         return unescape(re.sub(r"\s+", " ", text)).strip()
 
+    def parse_credits(raw_value: str):
+        raw_value = raw_value.strip()
+        if not raw_value:
+            return 0
+        try:
+            value = float(raw_value)
+            return int(value) if value.is_integer() else value
+        except ValueError:
+            return 0
+
+    def parse_meeting_info(raw_text: str):
+        start_date = ""
+        end_date = ""
+        meeting_days = []
+        meeting_times = []
+
+        date_match = re.search(r"Meeting Date:\s*(.*?)\s*to\s*(.*?)\s*(?:Days:|$)", raw_text, flags=re.I)
+        if date_match:
+            start_date = date_match.group(1).strip()
+            end_date = date_match.group(2).strip()
+
+        days_match = re.search(r"Days:\s*(.*?)\s*(?:Time:|$)", raw_text, flags=re.I)
+        if days_match:
+            days_text = days_match.group(1).strip()
+            if days_text:
+                meeting_days = days_text.split()
+
+        time_match = re.search(r"Time:\s*(.*)$", raw_text, flags=re.I)
+        if time_match:
+            time_text = time_match.group(1).strip()
+            if time_text:
+                meeting_times = [time_text]
+
+        return start_date, end_date, meeting_days, meeting_times
+
     course_subject = course_subject.upper().strip()
     course_code = course_code.strip()
 
-    for row in re.findall(r"<tr\b[^>]*>.*?</tr>", raw_html, flags=re.S | re.I):
+    rows = re.findall(r"<tr\b[^>]*>.*?</tr>", raw_html, flags=re.S | re.I)
+    for idx, row in enumerate(rows):
         if 'name="select_action"' not in row:
             continue
 
         cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row, flags=re.S | re.I)
-        if len(cells) < 6:
+        if len(cells) < 11:
             continue
 
         subject_text = clean_text(cells[3])
@@ -108,8 +144,55 @@ async def course_search(course_subject: str, course_code: str = "") -> dict:
         if course_code and code != course_code:
             continue
 
+        crn_text = clean_text(cells[2])
+        section = clean_text(cells[4])
         title = clean_text(cells[5])
-        courses.append(course(subject, code, title))
+        credits = parse_credits(clean_text(cells[6]))
+        session_type = clean_text(cells[7])
+        instructor = clean_text(cells[10]) or "Unknown"
+
+        start_date = ""
+        end_date = ""
+        meeting_days = []
+        meeting_times = []
+
+        # Detail rows for this course appear after the main row until the next row with a checkbox.
+        detail_idx = idx + 1
+        while detail_idx < len(rows) and 'name="select_action"' not in rows[detail_idx]:
+            detail_text = clean_text(rows[detail_idx])
+            if "Meeting Date:" in detail_text:
+                parsed_start, parsed_end, parsed_days, parsed_times = parse_meeting_info(detail_text)
+                if parsed_start:
+                    start_date = parsed_start
+                if parsed_end:
+                    end_date = parsed_end
+                if parsed_days:
+                    meeting_days = parsed_days
+                if parsed_times:
+                    meeting_times = parsed_times
+            detail_idx += 1
+
+        try:
+            crn = int(crn_text)
+        except ValueError:
+            crn = 0
+
+        courses.append(
+            course(
+                subject=subject,
+                code=code,
+                title=title,
+                start_date=start_date,
+                end_date=end_date,
+                meeting_days=meeting_days,
+                meeting_times=meeting_times,
+                credits=credits,
+                instructor=instructor,
+                session_type=session_type,
+                crn=crn,
+                section=section,
+            )
+        )
     
 
     return {
