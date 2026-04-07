@@ -2,7 +2,7 @@
 # - Add prerequisites, description
 
 class course:
-    def __init__(self, subject: str, code: str, title: str, start_date: str = "", end_date: str = "", meeting_days: list[str] = [], meeting_times: list[str] = [], credits: int = 0, instructor: str = "Unknown", session_type: str = "", crn: int = 0,):
+    def __init__(self, subject: str, code: str, title: str, start_date: str = "", end_date: str = "", meeting_days: list[str] = [], meeting_times: list[str] = [], credits: int = 0, instructor: str = "Unknown", session_type: str = "", crn: int = 0, section: str = ""):
         self.crn = crn
         self.subject = subject
         self.code = code
@@ -15,6 +15,7 @@ class course:
         self.credits = credits
         self.instructor = instructor
         self.session_type = session_type # lecture, lab, tutorial, etc.
+        self.section = section # A, B, C, etc.
 
     def __str__(self):
-        return f"({self.crn}) {self.subject}{self.code}: {self.title}"
+        return str(self.__dict__)
