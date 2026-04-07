@@ -124,13 +124,22 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
     course_subject = course_subject.upper().strip()
     course_code = course_code.strip()
 
+    def is_course_row(cells: list[str]) -> bool:
+        if len(cells) < 11:
+            return False
+
+        crn_text = clean_text(cells[2])
+        subject_text = clean_text(cells[3])
+        if not re.fullmatch(r"\d+", crn_text):
+            return False
+        if not re.match(r"^[A-Za-z]{3,5}\s+\S+", subject_text):
+            return False
+        return True
+
     rows = re.findall(r"<tr\b[^>]*>.*?</tr>", raw_html, flags=re.S | re.I)
     for idx, row in enumerate(rows):
-        if 'name="select_action"' not in row:
-            continue
-
         cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row, flags=re.S | re.I)
-        if len(cells) < 11:
+        if not is_course_row(cells):
             continue
 
         subject_text = clean_text(cells[3])
@@ -145,6 +154,7 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
             continue
 
         crn_text = clean_text(cells[2])
+        status = clean_text(cells[1])
         section = clean_text(cells[4])
         title = clean_text(cells[5])
         credits = parse_credits(clean_text(cells[6]))
@@ -156,10 +166,15 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
         meeting_days = []
         meeting_times = []
 
-        # Detail rows for this course appear after the main row until the next row with a checkbox.
+        # Detail rows for this course appear after the main row until the next main course row.
         detail_idx = idx + 1
-        while detail_idx < len(rows) and 'name="select_action"' not in rows[detail_idx]:
-            detail_text = clean_text(rows[detail_idx])
+        while detail_idx < len(rows):
+            detail_row = rows[detail_idx]
+            detail_cells = re.findall(r"<td\b[^>]*>(.*?)</td>", detail_row, flags=re.S | re.I)
+            if is_course_row(detail_cells):
+                break
+
+            detail_text = clean_text(detail_row)
             if "Meeting Date:" in detail_text:
                 parsed_start, parsed_end, parsed_days, parsed_times = parse_meeting_info(detail_text)
                 if parsed_start:
@@ -191,6 +206,7 @@ async def course_search(course_subject: str, course_code: str = "", course_term:
                 session_type=session_type,
                 crn=crn,
                 section=section,
+                status=status,
             )
         )
     

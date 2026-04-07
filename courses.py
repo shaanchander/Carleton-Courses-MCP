@@ -19,7 +19,7 @@ async def request_course_info(course_subject: str, course_code: str = "", course
 
 
 @mcp.tool()
-async def request_available_terms() -> dict:
+async def request_term_ids() -> dict:
     """
     Available course terms for searching. Returns a dictionary mapping term codes to human-readable names.
 
