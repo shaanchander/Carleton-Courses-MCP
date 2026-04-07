@@ -6,6 +6,7 @@ from objects import course
 import httpx
 
 CARLETON_COURSE_SEARCH_URL = "https://central.carleton.ca/prod/bwysched.p_course_search"
+RMP_GRAPHQL_URL = "https://www.ratemyprofessors.com/graphql"
 
 async def course_search(course_subject: str, course_code: str = "", course_term: int = 202620) -> dict:
     """
@@ -393,4 +394,53 @@ async def course_details(crn: int, term_id: int) -> dict:
 
     details["meetings"] = meetings
     return details
+    
+
+async def rmp_prof_search(professor_name: str) -> list[dict]:
+    """Search for professor ratings on RateMyProfessors.com by name."""
+    
+    profs = []
+    response_json = None
+
+
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko/20100101 Firefox/149.0'
+    }
+
+    json_data = {
+        'query': 'query NewSearchTeachersQuery(\n  $query: TeacherSearchQuery!\n  $count: Int\n  $includeCompare: Boolean!\n) {\n  newSearch {\n    teachers(query: $query, first: $count) {\n      didFallback\n      edges {\n        cursor\n        node {\n          id\n          legacyId\n          firstName\n          lastName\n          department\n          departmentId\n          school {\n            legacyId\n            name\n            id\n          }\n          ...CompareProfessorsColumn_teacher @include(if: $includeCompare)\n        }\n      }\n    }\n  }\n}\n\nfragment CompareProfessorsColumn_teacher on Teacher {\n  id\n  legacyId\n  firstName\n  lastName\n  school {\n    legacyId\n    name\n    id\n  }\n  department\n  departmentId\n  avgRating\n  avgDifficulty\n  numRatings\n  wouldTakeAgainPercentRounded\n  mandatoryAttendance {\n    yes\n    no\n    neither\n    total\n  }\n  takenForCredit {\n    yes\n    no\n    neither\n    total\n  }\n  ...NoRatingsArea_teacher\n  ...RatingDistributionWrapper_teacher\n}\n\nfragment NoRatingsArea_teacher on Teacher {\n  lastName\n  ...RateTeacherLink_teacher\n}\n\nfragment RateTeacherLink_teacher on Teacher {\n  legacyId\n  numRatings\n  lockStatus\n}\n\nfragment RatingDistributionChart_ratingsDistribution on ratingsDistribution {\n  r1\n  r2\n  r3\n  r4\n  r5\n}\n\nfragment RatingDistributionWrapper_teacher on Teacher {\n  ...NoRatingsArea_teacher\n  ratingsDistribution {\n    total\n    ...RatingDistributionChart_ratingsDistribution\n  }\n}\n',
+        'operationName': 'NewSearchTeachersQuery',
+        'variables': {
+            'query': {
+                'text': professor_name,
+                'schoolID': 'U2Nob29sLTE0MjA=',
+            },
+            'count': 10,
+            'includeCompare': False,
+        },
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(RMP_GRAPHQL_URL, headers=headers, json=json_data, timeout=30.0)
+            response.raise_for_status()
+            response_json = response.json()
+        except Exception as exc:
+            print(f"rmp_prof_search request failed: {exc}")
+            return profs
+
+    edges = (
+        response_json.get("data", {})
+        .get("newSearch", {})
+        .get("teachers", {})
+        .get("edges", [])
+    )
+
+    for edge in edges:
+        node = edge.get("node", {})
+        if node:
+            profs.append(node)
+
+    return profs
     
