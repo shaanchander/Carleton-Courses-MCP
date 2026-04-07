@@ -14,8 +14,10 @@ async def request_course_info(course_subject: str, course_code: str = "") -> dic
         course_subject (str): The subject of the course (e.g., "COMP").
         course_code (str, optional): The specific course code (e.g., "1405"). Defaults to "".
     """
+
+    data = course_search(course_subject, course_code)
     
-    return course_search(course_subject, course_code)
+    return await data
 
 if __name__ == "__main__":
     mcp.run()
