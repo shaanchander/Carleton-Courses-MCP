@@ -1,5 +1,5 @@
 # from typing import Any
-from helpers import course_search, search_terms, course_details
+from helpers import course_search, search_terms, course_details, rmp_prof_details, rmp_prof_search
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -35,6 +35,25 @@ async def request_course_details(crn: int, term_id:int) -> dict:
     """
 
     return await course_details(crn, term_id)
+
+
+@mcp.tool()
+async def request_rmp_prof_search(name: str) -> list[dict]:
+    """
+    Search for professors on RateMyProfessors.com by name. Returns a list of dictionaries containing professor information.
+
+    """
+
+    return await rmp_prof_search(name)
+
+@mcp.tool()
+async def request_rmp_prof_details(id: str) -> dict:
+    """
+    Search for specific professor details on RateMyProfessors.com by professor ID. Returns a dictionary containing detailed professor information.
+
+    """
+
+    return await rmp_prof_details(id)
     
 
 if __name__ == "__main__":
