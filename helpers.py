@@ -6,7 +6,7 @@ import httpx
 
 CARLETON_COURSE_SEARCH_URL = "https://central.carleton.ca/prod/bwysched.p_course_search"
 
-async def course_search(course_subject: str, course_code: str = "") -> dict:
+async def course_search(course_subject: str, course_code: str = "", course_term: int = 202620) -> dict:
     """
     Search for courses based on subject and optional course code.
     
@@ -23,7 +23,7 @@ async def course_search(course_subject: str, course_code: str = "") -> dict:
     # fetch raw html from Carleton course search page
     data = [
         ('wsea_code', 'EXT'),
-        ('term_code', '202620'),
+        ('term_code', str(course_term)),
         ('session_id', '25259018'),
         ('ws_numb', ''),
         ('sel_aud', 'dummy'),
@@ -198,3 +198,31 @@ async def course_search(course_subject: str, course_code: str = "") -> dict:
     return {
         "results": courses
     }
+
+
+
+async def search_terms() -> dict[str, str]:
+    """Fetch available search terms as {term_id: friendly_name}."""
+    url = "https://central.carleton.ca/prod/bwysched.p_select_term?wsea_code=EXT"
+    
+    terms: dict[str, str] = {}
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+            raw_html = response.text
+        except Exception:
+            return terms
+
+    # Example option: <option value="202620">Summer 2026 (May-August)</option>
+    term_matches = re.findall(
+        r'<option\s+value="(\d{6})"[^>]*>(.*?)</option>',
+        raw_html,
+        flags=re.I | re.S,
+    )
+    for term_id, friendly_name in term_matches:
+        text = re.sub(r"<[^>]+>", "", friendly_name)
+        terms[int(term_id.strip())] = unescape(re.sub(r"\s+", " ", text)).strip()
+
+    return terms
