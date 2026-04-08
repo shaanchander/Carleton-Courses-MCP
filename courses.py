@@ -11,11 +11,11 @@ async def request_course_search(course_requests: list[tuple[str, str]], course_t
     """Fetch course information for a list of (subject, code) requests.
     Args:
         course_requests (list[tuple[str, str]]): A list of (subject, code) tuples.
-        course_term (int, optional): Term used for all requests.
+        course_term (int, optional): Term used for all requests (ALWAYS call request_term_ids before this to know which term to search, don't guess).
     """
 
     results = await asyncio.gather(
-        *[course_search(subject, code, course_term) for subject, code in course_requests]
+        *[course_search(subject.upper(), code, course_term) for subject, code in course_requests]
     )
 
     return {f"{subject}{code}": result for (subject, code), result in zip(course_requests, results)}
@@ -24,7 +24,7 @@ async def request_course_search(course_requests: list[tuple[str, str]], course_t
 @mcp.tool()
 async def request_term_ids() -> dict:
     """
-    Available course terms for searching. Returns a dictionary mapping term codes to human-readable names.
+    Returns available course terms for searching. Returns a dictionary mapping term codes to human-readable names.
 
     """
 
@@ -33,7 +33,8 @@ async def request_term_ids() -> dict:
 @mcp.tool()
 async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict:
     """
-    Fetch course details for a list of (crn, term_id) requests.
+    Fetch course details for a list of (crn, term_id) requests. CRNs are unique identifiers for specific course offerings in a given term which can
+    be obtained from either the user or request_course_search. Term IDs can be obtained from request_term_ids. Returns a dictionary keyed by CRN.
 
     """
 
@@ -62,7 +63,8 @@ async def request_rmp_prof_search(search_requests: list[tuple[str]]) -> dict:
 @mcp.tool()
 async def request_rmp_prof_details(detail_requests: list[tuple[str]]) -> dict:
     """
-    Search for specific professor details on RateMyProfessors.com by professor ID.
+    Search for specific professor details on RateMyProfessors.com by professor ID. Professor scores and details
+    are important for students when choosing courses.
     Accepts a list of one-item tuples: [(id,), ...].
     Returns a dictionary keyed by professor ID.
 
