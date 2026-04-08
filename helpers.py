@@ -418,7 +418,7 @@ async def rmp_prof_search(professor_name: str) -> list[dict]:
                 'text': professor_name,
                 'schoolID': 'U2Nob29sLTE0MjA=',
             },
-            'count': 10,
+            'count': 6,
             'includeCompare': False,
         },
     }
