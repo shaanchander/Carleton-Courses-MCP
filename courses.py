@@ -8,7 +8,10 @@ mcp = FastMCP("Carleton Courses MCP")
 
 @mcp.tool()
 async def request_course_search(course_requests: list[tuple[str, str]], course_term=202620) -> dict:
-    """Fetch course information for a list of (subject, code) requests.
+    """Fetch course information for a list of (subject, code) requests. This tool can be used to search for an unlimited number of courses at once, 
+    which is more efficient than calling request_course_search multiple times for individual courses. 
+    Returns a dictionary keyed by "SUBJECTCODE" (e.g. "COMP1406"). If the course is not found, it will return an empty list at the results key.
+    Always call request_term_ids first to know which term to search, don't guess.
     Args:
         course_requests (list[tuple[str, str]]): A list of (subject, code) tuples.
         course_term (int, optional): Term used for all requests (ALWAYS call request_term_ids before this to know which term to search, don't guess).
@@ -24,7 +27,8 @@ async def request_course_search(course_requests: list[tuple[str, str]], course_t
 @mcp.tool()
 async def request_term_ids() -> dict:
     """
-    Returns available course terms for searching. Returns a dictionary mapping term codes to human-readable names.
+    Returns available course terms for searching. Returns a dictionary mapping term codes to human-readable names. 
+    *** You should NEVER call this more than once per session (the info is static). ***
 
     """
 
@@ -35,6 +39,8 @@ async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict
     """
     Fetch course details for a list of (crn, term_id) requests. CRNs are unique identifiers for specific course offerings in a given term which can
     be obtained from either the user or request_course_search. Term IDs can be obtained from request_term_ids. Returns a dictionary keyed by CRN.
+    This tool can take an unlimited number of (crn, term_id) requests at once, which is more efficient than calling request_course_details multiple times for individual courses. 
+    Always call request_term_ids first to know which term to search, don't guess.
 
     """
 
@@ -48,9 +54,12 @@ async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict
 @mcp.tool()
 async def request_rmp_prof_search(search_requests: list[tuple[str]]) -> dict:
     """
-    Search for professors on RateMyProfessors.com by name.
+    Search for professors on RateMyProfessors.com by name. Professor scores and details are important for students 
+    when choosing courses. This tool can take an unlimited number of professor name requests at once, which is more 
+    efficient than calling request_rmp_prof_search multiple times for individual professors. 
+    Always call request_rmp_prof_search before request_rmp_prof_details to get professor IDs, don't guess.
     Accepts a list of one-item tuples: [(name,), ...].
-    Returns a dictionary keyed by professor name.
+    Returns a dictionary keyed by professor name (use the id field for request_rmp_prof_details).
 
     """
 
@@ -64,7 +73,9 @@ async def request_rmp_prof_search(search_requests: list[tuple[str]]) -> dict:
 async def request_rmp_prof_details(detail_requests: list[tuple[str]]) -> dict:
     """
     Search for specific professor details on RateMyProfessors.com by professor ID. Professor scores and details
-    are important for students when choosing courses.
+    are important for students when choosing courses. You MUST call request_rmp_prof_search first to get professor IDs, 
+    then use those IDs to call this function for details. Professor IDs are NOT the same as CRNs or term IDs, they are unique 
+    identifiers for professors on RMP backend that are strings (not just numbers). Don't display the professor ID to users, it's only for internal use.
     Accepts a list of one-item tuples: [(id,), ...].
     Returns a dictionary keyed by professor ID.
 
