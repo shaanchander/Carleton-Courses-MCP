@@ -4,11 +4,10 @@ from helpers import course_search, search_terms, course_details, rmp_prof_detail
 import asyncio
 from mcp.server.fastmcp import FastMCP
 
-# Initialize FastMCP server
 mcp = FastMCP("Carleton Courses MCP")
 
 @mcp.tool()
-async def request_course_info(course_requests: list[tuple[str, str]], course_term=202620) -> dict:
+async def request_course_search(course_requests: list[tuple[str, str]], course_term=202620) -> dict:
     """Fetch course information for a list of (subject, code) requests.
     Args:
         course_requests (list[tuple[str, str]]): A list of (subject, code) tuples.
