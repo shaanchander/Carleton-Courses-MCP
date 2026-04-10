@@ -65,6 +65,7 @@ Use this in your client config (ex. Claude Desktop, LM Studio, etc.):
  (You might instead have to provide the full path to uv which can be found with ```which uv``` on Linux and Mac and ```where uv``` on Windows)
 
 ## TODO:
+	- trim graphql calls
 	- cleanup response from course_details and rmp_prof_details (don't waste context)
 	- Reddit search?
 	- Fetch outlines for certain faculties?
