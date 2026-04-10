@@ -1,5 +1,5 @@
 # from typing import Any
-from helpers import course_search, search_terms, course_details, rmp_prof_details, rmp_prof_search
+from helpers import course_search, search_terms, course_details, rmp_prof_details, rmp_prof_search, rmp_prof_ratings_by_course
 
 import asyncio
 from mcp.server.fastmcp import FastMCP
@@ -34,21 +34,21 @@ async def request_term_ids() -> dict:
 
     return await search_terms()
 
-@mcp.tool()
-async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict:
-    """
-    Fetch course details for a list of (crn, term_id) requests. CRNs are unique identifiers for specific course offerings in a given term which can
-    be obtained from either the user or request_course_search. Term IDs can be obtained from request_term_ids. Returns a dictionary keyed by CRN.
-    This tool can take an unlimited number of (crn, term_id) requests at once, which is more efficient than calling request_course_details multiple times for individual courses. 
-    Always call request_term_ids first to know which term to search, don't guess.
+# @mcp.tool()
+# async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict:
+#     """
+#     Fetch course details for a list of (crn, term_id) requests. CRNs are unique identifiers for specific course offerings in a given term which can
+#     be obtained from either the user or request_course_search. Term IDs can be obtained from request_term_ids. Returns a dictionary keyed by CRN.
+#     This tool can take an unlimited number of (crn, term_id) requests at once, which is more efficient than calling request_course_details multiple times for individual courses. 
+#     Always call request_term_ids first to know which term to search, don't guess.
 
-    """
+#     """
 
-    results = await asyncio.gather(
-        *[course_details(crn, term_id) for crn, term_id in detail_requests]
-    )
+#     results = await asyncio.gather(
+#         *[course_details(crn, term_id) for crn, term_id in detail_requests]
+#     )
 
-    return {crn: result for (crn, _term_id), result in zip(detail_requests, results)}
+#     return {crn: result for (crn, _term_id), result in zip(detail_requests, results)}
 
 
 @mcp.tool()
@@ -86,6 +86,24 @@ async def request_rmp_prof_details(detail_requests: list[tuple[str]]) -> dict:
     )
 
     return {prof_id: result for (prof_id,), result in zip(detail_requests, results)}
+
+
+@mcp.tool()
+async def request_rmp_prof_ratings_by_course(prof_id: str, course_codes: list[str]) -> dict:
+    """
+    Returns professor ratings filtered by specific course codes from RMP. *** These course codes should be 
+    the same as the ones returned by request_rmp_prof_details for each professor (differs for each professor). ***
+    Keep in mind that a single course might have multiple course codes (e.g. COMP 1406 might be listed as COMP 1406, COMP 1406, 1406, etc.) 
+    so make sure to include all relevant course codes for accurate filtering.
+    
+    The prof_id should only be obtained from request_rmp_prof_search, don't guess. 
+    
+    This tool is useful for a detailed view of a specific prof, don't use this if you are comparing a lot
+    of profs (this returns all the ratings, can be quite a lot of info).
+
+    """
+
+    return await rmp_prof_ratings_by_course(prof_id, course_codes)
     
 
 if __name__ == "__main__":
