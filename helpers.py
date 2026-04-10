@@ -475,6 +475,70 @@ async def rmp_prof_details(professor_id: str) -> dict:
             print(f"rmp_prof_search request failed: {exc}")
             return details
 
-    details = response_json["data"]["node"]
+    node = response_json.get("data", {}).get("node", {})
+    if not isinstance(node, dict):
+        return details
+
+    dropped_keys = {
+        "__typename",
+        "school",
+        "relatedTeachers",
+        "pageInfo",
+        "cursor",
+        "departmentId",
+        "isProfCurrentUser",
+        "isSaved",
+        "lockStatus",
+        "thumbs",
+    }
+
+    def prune(value: Any):
+        if isinstance(value, dict):
+            cleaned: dict[str, Any] = {}
+
+            for key, val in value.items():
+                lower_key = key.lower()
+                if key in dropped_keys or lower_key == "id" or lower_key.endswith("id"):
+                    continue
+
+                if key == "ratings" and isinstance(val, dict):
+                    edges = val.get("edges", [])
+                    ratings_list = []
+                    for edge in edges:
+                        if not isinstance(edge, dict):
+                            continue
+                        rating_node = edge.get("node", {})
+                        pruned_rating = prune(rating_node)
+                        if pruned_rating not in (None, "", [], {}):
+                            ratings_list.append(pruned_rating)
+                    cleaned["ratings"] = ratings_list
+                    continue
+
+                if key == "teacherRatingTags" and isinstance(val, list):
+                    tags: dict[str, int] = {}
+                    for tag in val:
+                        if not isinstance(tag, dict):
+                            continue
+                        tag_name = tag.get("tagName")
+                        tag_count = tag.get("tagCount")
+                        if isinstance(tag_name, str) and tag_name.strip() and isinstance(tag_count, int):
+                            tags[tag_name.strip()] = tag_count
+                    cleaned["teacherRatingTags"] = tags
+                    continue
+
+                pruned_val = prune(val)
+                if pruned_val in (None, "", [], {}):
+                    continue
+                cleaned[key] = pruned_val
+
+            return cleaned
+
+        if isinstance(value, list):
+            cleaned_list = [prune(item) for item in value]
+            return [item for item in cleaned_list if item not in (None, "", [], {})]
+
+        return value
+
+    details = prune(node)
 
     return details
