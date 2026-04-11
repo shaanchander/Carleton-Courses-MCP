@@ -67,6 +67,7 @@ Use this in your client config (ex. Claude Desktop, LM Studio, etc.):
 ## TODO:
 	- trim graphql calls
 	- cleanup response from course_details and rmp_prof_details (don't waste context)
+	- more classes to better format data (ex. profs, course details, etc.)
 	- Reddit search?
 	- Fetch outlines for certain faculties?
 	- Use BeautifulSoup for HTML parsing?

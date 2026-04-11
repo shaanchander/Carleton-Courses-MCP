@@ -76,6 +76,10 @@ async def request_rmp_prof_details(detail_requests: list[tuple[str]]) -> dict:
     are important for students when choosing courses. You MUST call request_rmp_prof_search first to get professor IDs, 
     then use those IDs to call this function for details. Professor IDs are NOT the same as CRNs or term IDs, they are unique 
     identifiers for professors on RMP backend that are strings (not just numbers). Don't display the professor ID to users, it's only for internal use.
+
+    This tool only returns a subset of all ratings. For more details, you can call request_rmp_prof_ratings_by_course to 
+    get all rating for a specific professor for specific course codes.
+
     Accepts a list of one-item tuples: [(id,), ...].
     Returns a dictionary keyed by professor ID.
 
@@ -91,7 +95,7 @@ async def request_rmp_prof_details(detail_requests: list[tuple[str]]) -> dict:
 @mcp.tool()
 async def request_rmp_prof_ratings_by_course(prof_id: str, course_codes: list[str]) -> dict:
     """
-    Returns professor ratings filtered by specific course codes from RMP. *** These course codes should be 
+    Returns all professor ratings filtered by specific course codes from RMP. *** These course codes should be 
     the same as the ones returned by request_rmp_prof_details for each professor (differs for each professor). ***
     Keep in mind that a single course might have multiple course codes (e.g. COMP 1406 might be listed as COMP 1406, COMP 1406, 1406, etc.) 
     so make sure to include all relevant course codes for accurate filtering.
@@ -99,7 +103,8 @@ async def request_rmp_prof_ratings_by_course(prof_id: str, course_codes: list[st
     The prof_id should only be obtained from request_rmp_prof_search, don't guess. 
     
     This tool is useful for a detailed view of a specific prof, don't use this if you are comparing a lot
-    of profs (this returns all the ratings, can be quite a lot of info).
+    of profs (this returns all the ratings, can be quite a lot of info). If you are only comparing 3 or fewer profs for a specific course, 
+    call this tool to get all ratings for each prof and then compare.
 
     """
 
