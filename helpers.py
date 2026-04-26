@@ -689,3 +689,65 @@ async def fetch_undergrad_programs() -> list[str]:
             collect_from_text(extracted_text)
 
     return programs
+
+
+async def fetch_subject_courses(course_subject: str) -> str:
+    """ Fetch all course details for a given subject """
+
+    subject = course_subject.strip().upper()
+    if not subject:
+        return ""
+
+    url = f"https://calendar.carleton.ca/undergrad/courses/{subject}/{subject}.pdf"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+        except Exception:
+            return ""
+
+    try:
+        reader = PdfReader(BytesIO(response.content))
+    except Exception:
+        return ""
+
+    pages: list[str] = []
+    for page in reader.pages:
+        extracted = page.extract_text() or ""
+        text = extracted.strip()
+        if text:
+            pages.append(text)
+
+    return "\n\n".join(pages)
+
+
+async def fetch_undergrad_program_info(program_slug: str) -> str:
+    """ Fetch detailed info for specified undergrad program by slug (e.g. computerscience) """
+
+    slug = program_slug.strip().lower()
+    if not slug:
+        return ""
+
+    url = f"https://calendar.carleton.ca/undergrad/undergradprograms/{slug}/{slug}.pdf"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+        except Exception:
+            return ""
+
+    try:
+        reader = PdfReader(BytesIO(response.content))
+    except Exception:
+        return ""
+
+    pages: list[str] = []
+    for page in reader.pages:
+        extracted = page.extract_text() or ""
+        text = extracted.strip()
+        if text:
+            pages.append(text)
+
+    return "\n\n".join(pages)
