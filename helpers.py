@@ -1,10 +1,12 @@
 from html import unescape
 import re
 import random
+from io import BytesIO
 from typing import Any
 
 from objects import course
 import httpx, asyncio
+from pypdf import PdfReader
 
 CARLETON_COURSE_SEARCH_URL = "https://central.carleton.ca/prod/bwysched.p_course_search"
 RMP_GRAPHQL_URL = "https://www.ratemyprofessors.com/graphql"
@@ -604,3 +606,34 @@ async def rmp_prof_ratings_by_course(professor_id: str, course_codes: list[str])
                 return ratings
 
     return ratings
+
+async def fetch_subject_courses(course_subject: str) -> str:
+    """ Fetch full details of all courses for a given subject """
+
+    subject = course_subject.strip().lower()
+    if not subject:
+        return ""
+
+    url = f"https://calendar.carleton.ca/undergrad/courses/{course_subject}/{course_subject}.pdf"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+        except Exception:
+            return ""
+
+    try:
+        # Parse PDF directly from response bytes without writing to disk.
+        reader = PdfReader(BytesIO(response.content))
+    except Exception:
+        return ""
+
+    pages: list[str] = []
+    for page in reader.pages:
+        extracted = page.extract_text() or ""
+        text = extracted.strip()
+        if text:
+            pages.append(text)
+
+    return "\n\n".join(pages)
