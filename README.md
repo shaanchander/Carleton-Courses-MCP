@@ -72,4 +72,5 @@ Use this in your client config (ex. Claude Desktop, LM Studio, etc.):
 	- Use BeautifulSoup for HTML parsing?
 	- allow for auto installing into Claude Desktop with one command
 	- provide definitions (ex. what is a breadth elective)?
-	- pull in required courses for a particular degree
+	- add ability to search by subject and level (ex. COMP 2000 level)
+	- improve docstring for tools (prompts)

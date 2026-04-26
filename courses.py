@@ -19,7 +19,8 @@ mcp = FastMCP("Carleton Courses MCP")
 @mcp.tool()
 async def request_course_search(course_requests: list[tuple[str, str]], course_term=202620) -> dict:
     """Fetch course information for a list of (subject, code) requests. This tool can be used to search for an unlimited number of courses at once, 
-    which is more efficient than calling request_course_search multiple times for individual courses. 
+    which is more efficient than calling request_course_search multiple times for individual courses. (*** GROUP REQUESTS TOGETHER, don't make a bunch of requests for
+    a single course, for example, make one query for all courses that you need at once ***)
     Returns a dictionary keyed by "SUBJECTCODE" (e.g. "COMP1406"). If the course is not found, it will return an empty list at the results key.
     Always call request_term_ids first to know which term to search, don't guess.
     Args:
@@ -152,9 +153,8 @@ async def request_undergrad_program_info(program_slug: str) -> str:
     
     This tool returns a large amount of text data, so only use this when necessary to not bloat context too much. 
     
-    Use request_undergrad_programs to get valid program slugs.
+    You MUST use request_undergrad_programs first to get valid program slugs. Don't guess what the slugs are.
 
-    Example slug: computerscience
     """
 
     return await fetch_undergrad_program_info(program_slug)
