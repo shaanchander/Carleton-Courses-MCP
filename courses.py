@@ -34,21 +34,21 @@ async def request_term_ids() -> dict:
 
     return await search_terms()
 
-# @mcp.tool()
-# async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict:
-#     """
-#     Fetch course details for a list of (crn, term_id) requests. CRNs are unique identifiers for specific course offerings in a given term which can
-#     be obtained from either the user or request_course_search. Term IDs can be obtained from request_term_ids. Returns a dictionary keyed by CRN.
-#     This tool can take an unlimited number of (crn, term_id) requests at once, which is more efficient than calling request_course_details multiple times for individual courses. 
-#     Always call request_term_ids first to know which term to search, don't guess.
+@mcp.tool()
+async def request_course_details(detail_requests: list[tuple[str, int]]) -> dict:
+    """
+    Fetch course details for a list of (crn, term_id) requests. CRNs are unique identifiers for specific course offerings in a given term which can
+    be obtained from either the user or request_course_search. Term IDs can be obtained from request_term_ids. Returns a dictionary keyed by CRN.
+    This tool can take an unlimited number of (crn, term_id) requests at once, which is more efficient than calling request_course_details multiple times for individual courses. 
+    Always call request_term_ids first to know which term to search, don't guess.
 
-#     """
+    """
 
-#     results = await asyncio.gather(
-#         *[course_details(crn, term_id) for crn, term_id in detail_requests]
-#     )
+    results = await asyncio.gather(
+        *[course_details(crn, term_id) for crn, term_id in detail_requests]
+    )
 
-#     return {crn: result for (crn, _term_id), result in zip(detail_requests, results)}
+    return {crn: result for (crn, _term_id), result in zip(detail_requests, results)}
 
 
 @mcp.tool()

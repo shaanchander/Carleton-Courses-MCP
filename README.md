@@ -70,3 +70,6 @@ Use this in your client config (ex. Claude Desktop, LM Studio, etc.):
 	- Reddit search?
 	- Fetch outlines for certain faculties?
 	- Use BeautifulSoup for HTML parsing?
+	- allow for auto installing into Claude Desktop with one command
+	- provide definitions (ex. what is a breadth elective)?
+	- pull in required courses for a particular degree
