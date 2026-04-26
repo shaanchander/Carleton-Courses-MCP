@@ -1,5 +1,15 @@
 # from typing import Any
-from helpers import course_search, search_terms, course_details, rmp_prof_details, rmp_prof_search, rmp_prof_ratings_by_course
+from helpers import (
+    course_search,
+    search_terms,
+    course_details,
+    rmp_prof_details,
+    rmp_prof_search,
+    rmp_prof_ratings_by_course,
+    fetch_subject_courses,
+    fetch_undergrad_programs,
+    fetch_undergrad_program_info,
+)
 
 import asyncio
 from mcp.server.fastmcp import FastMCP
@@ -109,6 +119,45 @@ async def request_rmp_prof_ratings_by_course(prof_id: str, course_codes: list[st
     """
 
     return await rmp_prof_ratings_by_course(prof_id, course_codes)
+
+
+@mcp.tool()
+async def request_subject_courses_text(course_subject: str) -> str:
+    """
+    Returns all courses for a specified subject (e.g. COMP). 
+    This tool returns a large amount of text data, so only use this when necessary to not bloat context too much. 
+    
+    This includes course descriptions and requirement-related content present in that PDF.
+    """
+
+    return await fetch_subject_courses(course_subject)
+
+
+@mcp.tool()
+async def request_undergrad_programs() -> list[str]:
+    """
+    Returns all undergrad program slugs. Use these as arguments for request_undergrad_program_info
+    to get detailed program info.
+
+    Example slug: computerscience
+    """
+
+    return await fetch_undergrad_programs()
+
+
+@mcp.tool()
+async def request_undergrad_program_info(program_slug: str) -> str:
+    """
+    Returns all information about a specified undergrad program by slug (e.g. computerscience)
+    
+    This tool returns a large amount of text data, so only use this when necessary to not bloat context too much. 
+    
+    Use request_undergrad_programs to get valid program slugs.
+
+    Example slug: computerscience
+    """
+
+    return await fetch_undergrad_program_info(program_slug)
     
 
 if __name__ == "__main__":
