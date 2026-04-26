@@ -637,3 +637,55 @@ async def fetch_subject_courses(course_subject: str) -> str:
             pages.append(text)
 
     return "\n\n".join(pages)
+
+
+async def fetch_undergrad_programs() -> list[str]:
+    """Fetch undergrad program slugs from the undergrad programs PDF links """
+
+    url = "https://calendar.carleton.ca/undergrad/undergradprograms/undergradprograms.pdf"
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=30.0)
+            response.raise_for_status()
+        except Exception:
+            return []
+
+    try:
+        reader = PdfReader(BytesIO(response.content))
+    except Exception:
+        return []
+
+    program_pattern = re.compile(
+        r"https?://calendar\.carleton\.ca/undergrad/undergradprograms/([a-z0-9\-]+)/",
+        flags=re.I,
+    )
+
+    programs: list[str] = []
+    seen: set[str] = set()
+
+    def collect_from_text(text: str) -> None:
+        for match in program_pattern.findall(text):
+            program = match.lower().strip()
+            if program and program not in seen:
+                seen.add(program)
+                programs.append(program)
+
+    for page in reader.pages:
+        # Prefer annotation URIs since PDFs often store links separately from page text.
+        annots = page.get("/Annots", [])
+        for annot_ref in annots:
+            try:
+                annot = annot_ref.get_object()
+                action = annot.get("/A")
+                uri = action.get("/URI") if action else None
+                if isinstance(uri, str):
+                    collect_from_text(uri)
+            except Exception:
+                continue
+
+        extracted_text = page.extract_text() or ""
+        if extracted_text:
+            collect_from_text(extracted_text)
+
+    return programs
