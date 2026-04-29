@@ -21,6 +21,7 @@ The server in [courses.py](courses.py) exposes:
 - request_rmp_prof_search (search for Carleton University professor by name)
 - request_rmp_prof_details (fetch details about a specific professor ID)
 - request_rmp_prof_ratings_by_course (fetch all ratings for specific prof filtered by certain course codes)
+- request_academic_year_events (fetch academic year calendar events for specified terms)
 
 ## Available Resources
 

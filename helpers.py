@@ -10,6 +10,7 @@ from pypdf import PdfReader
 
 CARLETON_COURSE_SEARCH_URL = "https://central.carleton.ca/prod/bwysched.p_course_search"
 RMP_GRAPHQL_URL = "https://www.ratemyprofessors.com/graphql"
+ACADEMIC_YEAR_URL = "https://calendar.carleton.ca/academicyear/"
 
 async def course_search(course_subject: str, course_code: str = "", course_term: int = 202620) -> dict:
     """
@@ -751,3 +752,96 @@ async def fetch_undergrad_program_info(program_slug: str) -> str:
             pages.append(text)
 
     return "\n\n".join(pages)
+
+
+async def fetch_academic_year_events(terms: list[str]) -> dict[str, list[dict[str, str]]]:
+    """Fetch academic year events for the requested term labels."""
+
+    if not terms:
+        return {}
+
+    def normalize_term_label(label: str) -> str:
+        text = label.upper()
+        text = re.sub(r"\bTERM\b", " ", text)
+        text = re.sub(r"[^A-Z0-9 ]+", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    requested_map: dict[str, str] = {}
+    results: dict[str, list[dict[str, str]]] = {}
+    for term in terms:
+        if not isinstance(term, str):
+            continue
+        cleaned = term.strip()
+        if not cleaned:
+            continue
+        normalized = re.sub(r"\s+", " ", cleaned).strip()
+        normalized = normalize_term_label(normalized)
+        if not normalized:
+            continue
+        if normalized not in requested_map:
+            requested_map[normalized] = cleaned
+            results[cleaned] = []
+
+    if not requested_map:
+        return {}
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(ACADEMIC_YEAR_URL, timeout=30.0)
+            response.raise_for_status()
+            raw_html = response.text
+        except Exception:
+            return results
+
+    def clean_text(fragment: str) -> str:
+        text = re.sub(r"<[^>]+>", "", fragment)
+        text = unescape(text)
+        text = text.replace("\xa0", " ")
+        return re.sub(r"\s+", " ", text).strip()
+
+    def is_term_header(text_upper: str) -> bool:
+        if not re.search(r"\b(19|20)\d{2}\b", text_upper):
+            return False
+        return bool(re.search(r"\b(SUMMER|FALL|WINTER)\b", text_upper))
+
+    rows = re.findall(r"<tr\b[^>]*>.*?</tr>", raw_html, flags=re.S | re.I)
+    current_term_key = ""
+    current_output_key = ""
+    last_date = ""
+
+    for row in rows:
+        cells = re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", row, flags=re.S | re.I)
+        if not cells:
+            continue
+
+        first_text = clean_text(cells[0])
+        first_upper = first_text.upper()
+        if is_term_header(first_upper):
+            current_term_key = normalize_term_label(first_text)
+            current_output_key = requested_map.get(current_term_key, "")
+            last_date = ""
+            continue
+
+        if not current_output_key:
+            continue
+        if len(cells) < 2:
+            continue
+
+        date_text = clean_text(cells[0])
+        description = clean_text(cells[1])
+        if not description:
+            continue
+
+        if not date_text:
+            date_text = last_date
+        else:
+            last_date = date_text
+
+        results[current_output_key].append(
+            {
+                "date_text": date_text,
+                "description": description,
+            }
+        )
+
+    return results

@@ -10,6 +10,7 @@ from helpers import (
     fetch_subject_courses,
     fetch_undergrad_programs,
     fetch_undergrad_program_info,
+    fetch_academic_year_events,
 )
 
 import asyncio
@@ -211,6 +212,24 @@ async def request_undergrad_program_info(program_slug: str) -> str:
     """
 
     return await fetch_undergrad_program_info(program_slug)
+
+
+@mcp.tool()
+async def request_academic_year_events(terms: list[str]) -> dict:
+    """
+    Returns academic year calendar events for the requested terms.
+
+    Use this when a user asks about specific dates or needs to know a calendar deadline,
+    such as when registration opens or closes, when tuition is due, when classes start,
+    or other term-specific academic deadlines.
+
+    Input format: pass a list of term strings in the form "Summer 2026", "Fall 2026",
+    or "Winter 2027". The season must be one of Summer, Fall, or Winter, followed by a
+    space and the year.
+
+    """
+
+    return await fetch_academic_year_events(terms)
     
 
 if __name__ == "__main__":
