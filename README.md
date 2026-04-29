@@ -22,6 +22,12 @@ The server in [courses.py](courses.py) exposes:
 - request_rmp_prof_details (fetch details about a specific professor ID)
 - request_rmp_prof_ratings_by_course (fetch all ratings for specific prof filtered by certain course codes)
 
+## Available Resources
+
+The server also exposes a static resource with Carleton registration terminology definitions:
+
+- `carleton://registration-terminology`
+
 ## Requirements
 
 - Python 3.14+
@@ -71,6 +77,5 @@ Use this in your client config (ex. Claude Desktop, LM Studio, etc.):
 	- Fetch outlines for certain faculties?
 	- Use BeautifulSoup for HTML parsing?
 	- allow for auto installing into Claude Desktop with one command
-	- provide definitions (ex. what is a breadth elective)?
 	- add ability to search by subject and level (ex. COMP 2000 level)
 	- improve docstring for tools (prompts)
