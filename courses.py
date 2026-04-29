@@ -52,11 +52,11 @@ REGISTRATION_TERMINOLOGY = {
 
 
 @mcp.tool()
-def registration_terminology_resource() -> str:
+def registration_terminology_resource() -> dict:
     """This resource provides definitions for key terms related to course registration at Carleton University.
+    *** CRITICAL: When discussing registration with a user, you should ***ALWAYS*** call this resource to ensure you provide the user with accurate information and definitions for any terms you see. ***
     If you are ever unsure about what a term means when discussing course registration, refer to this resource for clarification.
-    This resource is static and does not need to be called more than once per session.
-    When discussing registration with a user, you should ***ALWAYS*** call this resource to ensure you provide the user with accurate information and definitions for any terms you see. """
+    This resource is static and does not need to be called more than once per session. """
     return json.dumps(REGISTRATION_TERMINOLOGY, indent=2, ensure_ascii=False)
 
 
