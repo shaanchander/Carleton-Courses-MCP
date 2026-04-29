@@ -54,7 +54,7 @@ REGISTRATION_TERMINOLOGY = {
     "carleton://registration-terminology",
     name="registration_terminology",
     title="Carleton Registration Terminology",
-    description="Hardcoded Carleton registration terminology definitions extracted from the Carleton registration terminology page.",
+    description="Carleton registration terminology definitions",
     mime_type="application/json",
 )
 def registration_terminology_resource() -> str:
