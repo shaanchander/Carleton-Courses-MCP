@@ -51,13 +51,7 @@ REGISTRATION_TERMINOLOGY = {
 }
 
 
-@mcp.resource(
-    "carleton://registration-terminology",
-    name="registration_terminology",
-    title="Carleton Registration Terminology",
-    description="Carleton registration terminology definitions)",
-    mime_type="application/json",
-)
+@mcp.tool()
 def registration_terminology_resource() -> str:
     """This resource provides definitions for key terms related to course registration at Carleton University.
     If you are ever unsure about what a term means when discussing course registration, refer to this resource for clarification.
