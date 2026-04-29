@@ -14,6 +14,7 @@ from helpers import (
 
 import asyncio
 from mcp.server.fastmcp import FastMCP
+from mcp.types import TextContent
 
 mcp = FastMCP("Carleton Courses MCP")
 
@@ -54,11 +55,16 @@ REGISTRATION_TERMINOLOGY = {
     "carleton://registration-terminology",
     name="registration_terminology",
     title="Carleton Registration Terminology",
-    description="Carleton registration terminology definitions",
+    description="Carleton registration terminology definitions)",
     mime_type="application/json",
 )
 def registration_terminology_resource() -> str:
+    """This resource provides definitions for key terms related to course registration at Carleton University.
+    If you are ever unsure about what a term means when discussing course registration, refer to this resource for clarification.
+    This resource is static and does not need to be called more than once per session.
+    When discussing registration with a user, you should ***ALWAYS*** call this resource to ensure you provide the user with accurate information and definitions for any terms you see. """
     return json.dumps(REGISTRATION_TERMINOLOGY, indent=2, ensure_ascii=False)
+
 
 @mcp.tool()
 async def request_course_search(course_requests: list[tuple[str, str]], course_term=202620) -> dict:
