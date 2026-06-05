@@ -135,7 +135,11 @@ def _pkce_challenge(code_verifier: str, method: str = "S256") -> str:
     return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def _create_jwt(subject: str, client_id: str) -> str:
+def _b64decode_unpadded(value: str) -> bytes:
+    return urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def _create_jwt(subject: str, client_id: str, resource: str | None = None) -> str:
     """Create a simple HS256 JWT (no library needed)."""
     now = int(time.time())
     header = {"alg": "HS256", "typ": "JWT"}
@@ -146,6 +150,8 @@ def _create_jwt(subject: str, client_id: str) -> str:
         "exp": now + JWT_EXPIRE_SECONDS,
         "jti": str(uuid.uuid4()),
     }
+    if resource:
+        payload["aud"] = resource
     h_b64 = urlsafe_b64encode(json.dumps(header, separators=(',', ':')).encode()).rstrip(b"=").decode()
     p_b64 = urlsafe_b64encode(json.dumps(payload, separators=(',', ':')).encode()).rstrip(b"=").decode()
     signing_input = f"{h_b64}.{p_b64}"
@@ -162,10 +168,10 @@ def _verify_jwt(token: str) -> dict | None:
             return None
         signing_input = f"{parts[0]}.{parts[1]}"
         expected_sig = hmac.new(JWT_SECRET.encode(), signing_input.encode(), hashlib.sha256).digest()
-        actual_sig = urlsafe_b64decode(parts[2] + "=")  # add padding
+        actual_sig = _b64decode_unpadded(parts[2])
         if not hmac.compare_digest(expected_sig, actual_sig):
             return None
-        payload = json.loads(urlsafe_b64decode(parts[1] + "="))
+        payload = json.loads(_b64decode_unpadded(parts[1]))
         if payload.get("exp", 0) < time.time():
             return None
         return payload
@@ -281,19 +287,24 @@ def _login_form(error: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# OAuth 2.1 Authorization Server (minimal, auto-approve)
+# OAuth 2.1 Authorization Server (minimal, login form)
 # ---------------------------------------------------------------------------
 class OAuthServerMiddleware:
     """Minimal OAuth 2.1 server: /authorize, /token, /register + Bearer validation.
 
-    Auto-approves all authorization requests (personal project).
-    Supports PKCE S256, dynamic client registration, HS256 JWTs.
+    Supports PKCE S256, dynamic client registration, and HS256 JWTs.
     """
 
     def __init__(self, app: ASGIApp, base_url: str, mcp_path: str):
         self.app = app
         self.base_url = base_url.rstrip("/")
-        self.mcp_path = mcp_path
+        self.mcp_path = mcp_path if mcp_path.startswith("/") else f"/{mcp_path}"
+        if len(self.mcp_path) > 1:
+            self.mcp_path = self.mcp_path.rstrip("/")
+        self.resource_url = (
+            self.base_url if self.mcp_path == "/" else f"{self.base_url}{self.mcp_path}"
+        )
+        self.resource_metadata_url = f"{self.base_url}/.well-known/oauth-protected-resource"
 
     # ---- Route table ----
     OAUTH_PATHS = {
@@ -312,7 +323,7 @@ class OAuthServerMiddleware:
         path = scope.get("path", "")
 
         # Rate limit on OAuth + MCP endpoints
-        if path in self.OAUTH_PATHS or path == self.mcp_path or path.startswith(f"{self.mcp_path}/"):
+        if path in self.OAUTH_PATHS or self._is_mcp_path(path):
             ip = _get_client_ip(scope)
             if not _check_rate_limit(ip):
                 response = JSONResponse(
@@ -330,7 +341,7 @@ class OAuthServerMiddleware:
             return
 
         # 2. MCP endpoint — require Bearer token
-        if path == self.mcp_path or path.startswith(f"{self.mcp_path}/"):
+        if self._is_mcp_path(path):
             headers = _get_headers(scope)
             auth_header = headers.get("authorization", "")
 
@@ -339,9 +350,11 @@ class OAuthServerMiddleware:
                     {"error": "unauthorized", "error_description": "Bearer token required"},
                     status_code=401,
                     headers={
-                        "WWW-Authenticate": f'Bearer realm="{self.mcp_path}", '
-                        f'authorization="{self.base_url}/authorize", '
-                        f'token_endpoint="{self.base_url}/token"'
+                        "WWW-Authenticate": (
+                            'Bearer '
+                            f'resource_metadata="{self.resource_metadata_url}", '
+                            'scope="mcp"'
+                        )
                     },
                 )
                 await response(scope, receive, send)
@@ -353,6 +366,13 @@ class OAuthServerMiddleware:
                 response = JSONResponse(
                     {"error": "unauthorized", "error_description": "Invalid or expired token"},
                     status_code=401,
+                    headers={
+                        "WWW-Authenticate": (
+                            'Bearer error="invalid_token", '
+                            f'resource_metadata="{self.resource_metadata_url}", '
+                            'scope="mcp"'
+                        )
+                    },
                 )
                 await response(scope, receive, send)
                 return
@@ -361,6 +381,14 @@ class OAuthServerMiddleware:
 
         # 3. Pass through
         await self.app(scope, receive, send)
+
+    def _is_mcp_path(self, path: str) -> bool:
+        if self.mcp_path == "/":
+            return path == "/"
+        return path == self.mcp_path or path.startswith(f"{self.mcp_path}/")
+
+    def _valid_resource(self, resource: str) -> bool:
+        return not resource or resource in {self.resource_url, self.base_url}
 
     # ---- Endpoints ----
     async def _metadata(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -371,7 +399,8 @@ class OAuthServerMiddleware:
             "registration_endpoint": f"{self.base_url}/register",
             "response_types_supported": ["code"],
             "grant_types_supported": ["authorization_code"],
-            "code_challenge_methods_supported": ["S256", "plain"],
+            "code_challenge_methods_supported": ["S256"],
+            "resource_parameter_supported": True,
             "token_endpoint_auth_methods_supported": ["none"],
             "scopes_supported": ["mcp"],
         }
@@ -379,12 +408,13 @@ class OAuthServerMiddleware:
         await response(scope, receive, send)
 
     async def _resource_metadata(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """RFC8414 companion: protected resource metadata."""
+        """Protected resource metadata for OAuth discovery."""
         metadata = {
-            "resource": self.base_url,
+            "resource": self.resource_url,
             "authorization_servers": [self.base_url],
             "bearer_methods_supported": ["header"],
             "scopes_supported": ["mcp"],
+            "token_endpoint_auth_methods_supported": ["none"],
         }
         response = JSONResponse(metadata, status_code=200)
         await response(scope, receive, send)
@@ -405,9 +435,18 @@ class OAuthServerMiddleware:
         state = params.get("state", [""])[0]
         code_challenge = params.get("code_challenge", [""])[0]
         code_challenge_method = params.get("code_challenge_method", ["S256"])[0]
+        resource = params.get("resource", [""])[0]
 
         if not client_id or not redirect_uri:
             response = JSONResponse({"error": "invalid_request"}, status_code=400)
+            await response(scope, receive, send)
+            return
+        if code_challenge_method != "S256":
+            response = JSONResponse({"error": "invalid_request", "error_description": "S256 PKCE required"}, status_code=400)
+            await response(scope, receive, send)
+            return
+        if not self._valid_resource(resource):
+            response = JSONResponse({"error": "invalid_target", "error_description": "Unknown resource"}, status_code=400)
             await response(scope, receive, send)
             return
 
@@ -438,6 +477,7 @@ class OAuthServerMiddleware:
                 "state": state,
                 "code_challenge": code_challenge,
                 "code_challenge_method": code_challenge_method,
+                "resource": resource or self.resource_url,
                 "created_at": time.time(),
             }
             redirect_params = {"code": code}
@@ -483,6 +523,7 @@ class OAuthServerMiddleware:
         code = params.get("code", [""])[0]
         code_verifier = params.get("code_verifier", [""])[0]
         redirect_uri = params.get("redirect_uri", [""])[0]
+        resource = params.get("resource", [""])[0]
 
         if not code or code not in auth_codes:
             response = JSONResponse({"error": "invalid_grant"}, status_code=400)
@@ -490,6 +531,10 @@ class OAuthServerMiddleware:
             return
 
         auth_info = auth_codes.pop(code)  # single-use
+        if resource and resource != auth_info.get("resource"):
+            response = JSONResponse({"error": "invalid_target", "error_description": "Resource mismatch"}, status_code=400)
+            await response(scope, receive, send)
+            return
 
         # Verify PKCE
         expected_challenge = auth_info["code_challenge"]
@@ -508,7 +553,7 @@ class OAuthServerMiddleware:
             return
 
         # Issue tokens
-        access_token = _create_jwt("user", auth_info["client_id"])
+        access_token = _create_jwt("user", auth_info["client_id"], auth_info.get("resource"))
         refresh_token = str(uuid.uuid4())
 
         response = JSONResponse({
@@ -717,7 +762,7 @@ def create_app() -> ASGIApp:
                 "Set it to your public URL (e.g. https://mcp.yourdomain.com)"
             )
         app = OAuthServerMiddleware(app, base_url=BASE_URL, mcp_path=MCP_HTTP_PATH)
-        logger.info("Auth mode: OAuth 2.1 (auto-approve, PKCE S256)")
+        logger.info("Auth mode: OAuth 2.1 (login form, PKCE S256)")
         logger.info("OAuth metadata at: %s/.well-known/oauth-authorization-server", BASE_URL)
 
     elif AUTH_MODE == "query":
