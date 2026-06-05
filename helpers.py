@@ -608,38 +608,6 @@ async def rmp_prof_ratings_by_course(professor_id: str, course_codes: list[str])
 
     return ratings
 
-async def fetch_subject_courses(course_subject: str) -> str:
-    """ Fetch full details of all courses for a given subject """
-
-    subject = course_subject.strip().lower()
-    if not subject:
-        return ""
-
-    url = f"https://calendar.carleton.ca/undergrad/courses/{course_subject}/{course_subject}.pdf"
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, timeout=30.0)
-            response.raise_for_status()
-        except Exception:
-            return ""
-
-    try:
-        # Parse PDF directly from response bytes without writing to disk.
-        reader = PdfReader(BytesIO(response.content))
-    except Exception:
-        return ""
-
-    pages: list[str] = []
-    for page in reader.pages:
-        extracted = page.extract_text() or ""
-        text = extracted.strip()
-        if text:
-            pages.append(text)
-
-    return "\n\n".join(pages)
-
-
 async def fetch_undergrad_programs() -> list[str]:
     """Fetch undergrad program slugs from the undergrad programs PDF links """
 
