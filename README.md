@@ -1,157 +1,114 @@
-# Carleton Course Search MCP
+# Carleton Courses MCP
 
-MCP server for querying Carleton University course data, with professor lookup via RateMyProfessors (RMP).
+An MCP server for querying Carleton University course information, academic calendar dates, undergraduate program data, and RateMyProfessors data.
 
-## Background
+## Data Sources
 
-This project makes Carleton course information available through MCP tools so it can be used directly by an MCP-compatible client.
-
-Data sources:
-
-- Carleton public course search pages
-- RateMyProfessors GraphQL endpoint
-
-## Available Tools
-
-The server in [courses.py](courses.py) exposes:
-
-- request_term_ids (fetch availble terms for search)
-- request_course_search (fetch courses with specified subject, code, and term)
-- request_course_details (fetch details about a specific course CRN)
-- request_rmp_prof_search (search for Carleton University professor by name)
-- request_rmp_prof_details (fetch details about a specific professor ID)
-- request_rmp_prof_ratings_by_course (fetch all ratings for specific prof filtered by certain course codes)
-- request_academic_year_events (fetch academic year calendar events for specified terms)
-
-## Available Resources
-
-The server also exposes a static resource with Carleton registration terminology definitions:
-
-- `carleton://registration-terminology`
+- Carleton public course search
+- Carleton undergraduate calendar
+- Carleton academic year calendar
+- RateMyProfessors GraphQL API
 
 ## Requirements
 
 - Python 3.14+
 - uv
-- Network access to Carleton's public course search and RateMyProfessors endpoints
+- Network access to the public Carleton and RateMyProfessors endpoints
 
 ## Setup
-
-From the project root:
 
 ```bash
 uv sync
 ```
 
-## Modes
+## Server Entry Points
 
-| Mode | Env | Use case | Auth |
-|------|-----|----------|------|
-| **Stdio** | `uv run courses.py` | Local MCP clients (Claude Desktop, Cursor, etc.) | None |
-| **HTTP + Query** | `MCP_AUTH_MODE=query uv run courses_http.py` | Local testing behind tunnel | Query params (`?user=&password=`) |
-| **HTTP + Cloudflare** | `MCP_AUTH_MODE=cloudflare uv run courses_http.py` (default) | Remote LLM providers | Cloudflare Access headers |
+| File | Transport | Use case |
+| ---- | --------- | -------- |
+| `courses.py` | stdio | Local MCP clients such as Claude Desktop, Cursor, or LM Studio |
+| `courses_http.py` | Streamable HTTP | Remote MCP clients or local HTTP testing |
 
-## Configure Your Client
+## Tools
 
-This server is meant to be started by your MCP client through its JSON config.
+Both servers expose:
 
-(Replace `/absolute/path/to/carleton-courses-mcp` with your local path.)
+- `request_term_ids` - list available Carleton course search terms.
+- `request_course_search` - search for courses by subject, code, and term.
+- `request_course_details` - fetch detailed course information by CRN and term.
+- `request_rmp_prof_search` - search for Carleton professors on RateMyProfessors.
+- `request_rmp_prof_details` - fetch RateMyProfessors details for a professor ID.
+- `request_rmp_prof_ratings_by_course` - fetch professor ratings filtered by course code.
+- `request_subject_courses_text` - fetch undergraduate calendar course text for a subject.
+- `request_undergrad_programs` - list undergraduate program slugs.
+- `request_undergrad_program_info` - fetch undergraduate calendar information for a program slug.
+- `request_academic_year_events` - fetch academic year calendar events for terms such as `Fall 2026`.
 
-### For clients that use mcpServers (Stdio)
+The stdio server also exposes `registration_terminology_resource`, a static set of Carleton registration terminology definitions.
 
-Use this in your client config (ex. Claude Desktop, LM Studio, etc.):
+## Stdio Usage
+
+Run directly:
+
+```bash
+uv run courses.py
+```
+
+Example MCP client config:
 
 ```json
 {
-	"mcpServers": {
-		"carleton-courses": {
-			"command": "uv",
-			"args": [
-				"--directory",
-				"/absolute/path/to/carleton-courses-mcp",
-				"run",
-				"courses.py"
-			]
-		}
-	}
+  "mcpServers": {
+    "carleton-courses": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/absolute/path/to/carleton-courses-mcp",
+        "run",
+        "courses.py"
+      ]
+    }
+  }
 }
 ```
 
-### For remote HTTP clients (Claude, ChatGPT, etc.)
+## HTTP Usage
 
-Deploy with Cloudflare Access + Tunnel so remote providers can authenticate via OAuth.
+`courses_http.py` supports two auth modes:
 
-#### 1. Start the HTTP server
+- `oauth` - default; intended for remote clients behind HTTPS.
+- `query` - simple query-parameter auth for local testing only.
+
+Start the HTTP server in OAuth mode:
 
 ```bash
-# Prod mode (default, requires Cloudflare Access)
-MCP_AUTH_MODE=cloudflare uv run courses_http.py
+MCP_BASE_URL=https://mcp.yourdomain.com \
+MCP_AUTH_USERS="admin:use-a-real-password" \
+MCP_JWT_SECRET="use-a-long-random-secret" \
+uv run courses_http.py
+```
 
-# Local testing mode (query-param auth, NOT for production)
+Start the HTTP server in local query-auth mode:
+
+```bash
 MCP_AUTH_MODE=query uv run courses_http.py
 ```
 
-Server bind `127.0.0.1:8000` by default. Override with `MCP_HTTP_HOST` / `MCP_HTTP_PORT`.
+By default, the HTTP server binds to `0.0.0.0:8000` and serves MCP at `/`.
 
-#### 2. Create Cloudflare Tunnel
+## HTTP Environment Variables
 
-```bash
-# Install
-brew install cloudflared
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `MCP_AUTH_MODE` | `oauth` | Auth mode: `oauth` or `query`. |
+| `MCP_HTTP_HOST` | `0.0.0.0` | HTTP bind host. |
+| `MCP_HTTP_PORT` | `8000` | HTTP bind port. |
+| `MCP_HTTP_PATH` | `/` | Streamable HTTP MCP endpoint path. |
+| `MCP_BASE_URL` | unset | Public HTTPS base URL. Required in OAuth mode. |
+| `MCP_AUTH_USERS` | `admin:changeme` | Comma-separated `username:password` pairs for OAuth login. |
+| `MCP_JWT_SECRET` | `change-me-now` | HS256 JWT signing secret. Change this before exposing the server. |
+| `MCP_JWT_EXPIRE_SECONDS` | `3600` | OAuth access token lifetime in seconds. |
+| `MCP_QUERYAUTH_USERS` | `test-user:test-pass-123` | Comma-separated `username:password` pairs for query-auth mode. |
+| `MCP_RATE_LIMIT_MAX` | `30` | Max requests per rate-limit window for OAuth and MCP endpoints. |
+| `MCP_RATE_LIMIT_WINDOW` | `60` | Rate-limit window in seconds. |
 
-# Login & create tunnel
-cloudflared tunnel login
-cloudflared tunnel create mcp-tunnel
-
-# Point domain at tunnel
-cloudflared tunnel route dns mcp-tunnel mcp.yourdomain.com
-
-# Run tunnel (maps your domain → localhost:8000)
-cloudflared tunnel run --url http://127.0.0.1:8000 mcp-tunnel
-```
-
-Now `https://mcp.yourdomain.com/mcp` route to your server. TLS handle by Cloudflare. No open ports needed.
-
-#### 3. Configure Cloudflare Access
-
-**Zero Trust dashboard → Access → Applications → Add an application**:
-
-- **Application name**: `Carleton MCP`
-- **Service type**: Self-hosted
-- **Domain**: `mcp.yourdomain.com`
-- **Public URL**: `mcp.yourdomain.com/*`
-
-Create policy:
-
-- **Policy name**: `Allow authenticated users`
-- **Include → Email address** → `email_is_set` is `true`
-- Or add identity provider (Google, GitHub, etc.) for real user auth
-
-Save. Cloudflare inject `Cf-Access-Authenticated-User-Email` header on authorized requests.
-
-#### 4. Add to remote LLM provider
-
-Point MCP server URL to `https://mcp.yourdomain.com/mcp`.
-
-Provider send first request → get 401 → trigger OAuth flow → user login via Cloudflare Access → subsequent requests include auth header → authorized.
-
-#### Environment variables
-
-| Var | Default | Description |
-|-----|---------|-------------|
-| `MCP_AUTH_MODE` | `cloudflare` | `cloudflare` or `query` |
-| `MCP_HTTP_HOST` | `127.0.0.1` | Bind address |
-| `MCP_HTTP_PORT` | `8000` | Bind port |
-| `MCP_HTTP_PATH` | `/mcp` | MCP endpoint path |
-| `MCP_QUERYAUTH_USERS` | `test-user:test-pass-123` | Comma-sep `user:pass` pairs (query mode only) |
-
-## TODO:
-	- trim graphql calls
-	- cleanup response from course_details and rmp_prof_details (don't waste context)
-	- more classes to better format data (ex. profs, course details, etc.)
-	- Reddit search?
-	- Fetch outlines for certain faculties?
-	- Use BeautifulSoup for HTML parsing?
-	- allow for auto installing into Claude Desktop with one command
-	- add ability to search by subject and level (ex. COMP 2000 level)
-	- improve docstring for tools (prompts)
+`courses_http.py` also loads a local `.env` file from the project root if present.
