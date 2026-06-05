@@ -203,7 +203,7 @@ async def request_undergrad_programs() -> list[str]:
 @mcp.tool()
 async def request_undergrad_program_info(program_slug: str) -> str:
     """
-    Returns all information about a specified undergrad program by slug (e.g. computerscience)
+    Returns all information about a specified undergrad program by slug (e.g. computerscience) (This covers all streams in a program, so you don't need to specify a stream).
     
     This tool returns a large amount of text data, so only use this when necessary to not bloat context too much. 
     
