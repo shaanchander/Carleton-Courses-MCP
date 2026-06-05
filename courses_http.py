@@ -34,6 +34,7 @@ def _load_dotenv() -> None:
 _load_dotenv()
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -82,6 +83,11 @@ for _pair in os.getenv("MCP_AUTH_USERS", "admin:changeme").split(","):
 DEFAULT_QUERYAUTH_USERS = {
     "test-user": "test-pass-123",
 }
+
+# Browser-based MCP clients send CORS preflight requests before Streamable HTTP.
+CORS_ALLOW_ORIGINS = ["*"]
+CORS_ALLOW_METHODS = ["GET", "POST", "DELETE", "OPTIONS"]
+CORS_EXPOSE_HEADERS = ["Mcp-Session-Id", "WWW-Authenticate"]
 
 # ---------------------------------------------------------------------------
 # In-memory stores (ephemeral — fine for personal use)
@@ -774,7 +780,13 @@ def create_app() -> ASGIApp:
     else:
         raise ValueError(f"Unknown MCP_AUTH_MODE={AUTH_MODE!r}. Use 'oauth' or 'query'.")
 
-    return app
+    return CORSMiddleware(
+        app,
+        allow_origins=CORS_ALLOW_ORIGINS,
+        allow_methods=CORS_ALLOW_METHODS,
+        allow_headers=["*"],
+        expose_headers=CORS_EXPOSE_HEADERS,
+    )
 
 
 if __name__ == "__main__":
